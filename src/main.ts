@@ -18,6 +18,20 @@ if (!UPSTASH_REDIS_REST_URL) {
 async function buildServer() {
   const app = fastify();
 
+  await app.register(fastifyCors, {
+    origin: CORS_ORIGIN,
+  });
+
+  await app.register(fastifyIO);
+
+  app.io.on("connection", (io) => {
+    console.log("Client connected");
+
+    io.on("disconnect", () => {
+      console.log("disconnected");
+    });
+  });
+
   app.get("/healthcheck", () => {
     return {
       status: "ok",
