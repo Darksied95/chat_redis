@@ -12,12 +12,19 @@ const CORS_ORIGIN = process.env.HOST || "http://localhost:3000";
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 
 const CONNECTION_COUNT_CHANNEL = "chat:connection-count";
+
 if (!UPSTASH_REDIS_REST_URL) {
   console.log("missing UPSTASH_REDIS_REST_URL ");
   process.exit(1);
 }
 const publisher = new Redis(UPSTASH_REDIS_REST_URL);
 const subscriber = new Redis(UPSTASH_REDIS_REST_URL);
+
+const currentCount = publisher.get(CONNECTION_COUNT_CHANNEL);
+
+if (!currentCount) {
+  publisher.set(CONNECTION_COUNT_CHANNEL, 0);
+}
 
 async function buildServer() {
   const app = fastify();
@@ -28,11 +35,13 @@ async function buildServer() {
 
   await app.register(fastifyIO);
 
-  app.io.on("connection", (io) => {
+  app.io.on("connection", async (io) => {
     console.log("Client connected");
+    await publisher.incr(CONNECTION_COUNT_CHANNEL);
 
-    io.on("disconnect", () => {
+    io.on("disconnect", async () => {
       console.log("disconnected");
+      await publisher.decr(CONNECTION_COUNT_CHANNEL);
     });
   });
 
