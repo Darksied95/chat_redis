@@ -11,7 +11,8 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.HOST || "http://localhost:3000";
 const UPSTASH_REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL;
 
-const CONNECTION_COUNT_CHANNEL = "chat:connection-count";
+const CONNECTION_COUNT_KEY = "chat:connection-count";
+const CONNECTION_COUNT_UPDATED_CHANNEL = "chat:connection-count-updated";
 
 if (!UPSTASH_REDIS_REST_URL) {
   console.log("missing UPSTASH_REDIS_REST_URL ");
@@ -20,10 +21,10 @@ if (!UPSTASH_REDIS_REST_URL) {
 const publisher = new Redis(UPSTASH_REDIS_REST_URL);
 const subscriber = new Redis(UPSTASH_REDIS_REST_URL);
 
-const currentCount = publisher.get(CONNECTION_COUNT_CHANNEL);
+const currentCount = publisher.get(CONNECTION_COUNT_KEY);
 
 if (!currentCount) {
-  publisher.set(CONNECTION_COUNT_CHANNEL, 0);
+  publisher.set(CONNECTION_COUNT_KEY, 0);
 }
 
 async function buildServer() {
@@ -37,11 +38,18 @@ async function buildServer() {
 
   app.io.on("connection", async (io) => {
     console.log("Client connected");
-    await publisher.incr(CONNECTION_COUNT_CHANNEL);
+    const incCount = await publisher.incr(CONNECTION_COUNT_KEY);
+
+    //so our subscribers (browser) can see the newCOunt value
+    await publisher.publish(CONNECTION_COUNT_UPDATED_CHANNEL, String(incCount));
 
     io.on("disconnect", async () => {
       console.log("disconnected");
-      await publisher.decr(CONNECTION_COUNT_CHANNEL);
+      const descCount = await publisher.decr(CONNECTION_COUNT_KEY);
+      await publisher.publish(
+        CONNECTION_COUNT_UPDATED_CHANNEL,
+        String(descCount)
+      );
     });
   });
 
